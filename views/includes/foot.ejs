@@ -1,0 +1,364 @@
+<!--
+        Script
+        =================================================-->
+<script src="/javascripts/js/jquery-3.3.1.min.js"></script>
+<script src="/javascripts/js/bootstrap.min.js"></script>
+<script src="/javascripts/js/jquery.nice-select.min.js"></script>
+<script src="/javascripts/js/jquery-ui.min.js"></script>
+<script src="/javascripts/js/jquery.slicknav.js"></script>
+<script src="/javascripts/js/mixitup.min.js"></script>
+<script src="/javascripts/js/owl.carousel.min.js"></script>
+<script src="/javascripts/js/main.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.5/jquery.validate.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
+
+<script>
+  jQuery.validator.addMethod("noSpace", function (value, element) {
+    // allow any non-whitespace characters as the host part
+    return this.optional(element) || /^[^\s].*$/.test(value);
+  }, 'Invalid Name');
+
+  // Handle form submission
+  $(document).on("submit", "#addressForm", function (event) {
+    event.preventDefault();
+
+    $(this).validate({
+      rules: {
+        firstName: {
+          required: true,
+          noSpace: true
+        },
+        lastName: {
+          required: true,
+          noSpace: true
+        },
+        email: { email: true },
+        phone: { required: true, number: true, minlength: 10, maxlength: 10 },
+        address: { required: true },
+        country: { required: true },
+        state: { required: true },
+        postcode: { required: true, number: true, minlength: 6, maxlength: 6 },
+        addressType: { required: true }
+      },
+      messages: {
+        firstName: { required: 'Enter your first name'},
+        lastName: { required: 'Enter your last name'},
+        email: { email: 'Enter a valid e-mail address' },
+        phone: { required: 'Enter your contact number', number: 'Only digits allowed', minlength: 'Enter valid 10 digit number', maxlength: 'Enter valid 10 digit number' },
+        address: { required: 'Enter your address' },
+        country: { required: 'Enter your County' },
+        state: { required: 'Enter your State' },
+        postcode: { required: 'Enter your pincode', number: 'only digits allowed', minlength: 'Enter a valid 6 digit pincode', maxlength: 'Enter a valid 6 digit pincode' },
+        addressType: { required: 'Choose address type' }
+      },
+      errorPlacement: function (error, element) {
+        if (element.attr('name') === 'addressType') {
+          // Adjust the error message position for addressType field
+          error.appendTo(element.closest('.d-block'));
+        } else if (element.attr('name') === 'phone') {
+          error.insertBefore(element.closest('.input-group'));
+        } else {
+          // Default error message placement for other fields
+          error.insertAfter(element);
+        }
+      },
+      submitHandler: function (form) {
+        // This function will be called when the form is valid and ready to be submitted
+        form.submit();
+      }
+    });
+    if ($(this).valid()) {
+      $(this).submit()
+    }
+  });
+
+  // handle back button on checkout page
+  $(document).on('click', '#back-btn', () => {
+    location.reload()
+  })
+
+  // Handle form submission of checkout form
+  $(document).on('submit', '#checkoutForm', function (event) {
+    event.preventDefault()
+
+    $(this).validate({
+      rules: {
+        firstName: { required: true , noSpace: true},
+        lastName: { required: true, noSpace: true},
+        email: { email: true },
+        phone: { required: true, number: true, minlength: 10, maxlength: 10 },
+        address: { required: true },
+        country: { required: true },
+        state: { required: true },
+        postcode: { required: true, number: true, minlength: 6, maxlength: 6 },
+        addressType: { required: true },
+        paymentMethod: { required: true },
+      },
+      messages: {
+        firstName: { required: 'Enter your first name' },
+        lastName: { required: 'Enter your last name' },
+        email: { email: 'Enter a valid e-mail address' },
+        phone: { required: 'Enter your contact number', number: 'Only digits allowed', minlength: 'Enter valid 10 digit number', maxlength: 'Enter valid 10 digit number' },
+        address: { required: 'Enter your address' },
+        country: { required: 'Enter your County' },
+        state: { required: 'Enter your State' },
+        postcode: { required: 'Enter your pincode', number: 'only digits allowed', minlength: 'Enter a valid 6 digit pincode', maxlength: 'Enter a valid 6 digit pincode' },
+        addressType: { required: 'Choose address type' },
+        paymentMethod: { required: 'Choose payment option' },
+      },
+      errorPlacement: function (error, element) {
+        if (element.attr('name') === 'addressType' || element.attr('name') === 'paymentMethod') {
+          // Adjust the error message position for addressType and paymentMethod fields
+          error.appendTo(element.closest('.d-block'));
+        } else {
+          // Default error message placement for other fields
+          error.insertAfter(element);
+        }
+      },
+      submitHandler: function (form) {
+        event.preventDefault()
+        const couponId = $('#coupon-list').data('id') || null
+        const cartId = $(form).attr('data-cartId')
+        var formData = $(form).serializeArray();
+
+        $.ajax({
+          url: `/placeorder/${cartId}?promo=${couponId}`,
+          method: 'post',
+          data: formData,
+          success: function (response) {
+            if (response.orderPlaced) {
+              return location.href = `/order-placed/${response.orderId}`
+            }else if(response.err){
+              return Swal.fire({
+                title: 'Transaction Failed',
+                text: 'contact technical support',
+                icon: 'warning'
+              })
+            }
+          razorpayPayment(response.order, cartId)
+          },
+          error: function (err) {
+            console.log(err);
+            return Swal.fire({
+                title: 'Transaction Failed',
+                text: response.err,
+                icon: 'warning'
+              })
+          }
+        })
+      }
+    })
+    if ($(this).valid()) {
+      $(this).submit()
+    }
+  })
+
+  function razorpayPayment(order, cartId){
+  var options = {
+    "key": "rzp_test_Efp3SE5mX1w37z", // Enter the Key ID generated from the Dashboard
+    "amount": order.amount, // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
+    "currency": "INR",
+    "name": "Digi Mart",
+    "description": "Test Transaction",
+    "image": "/images/digimart-logo.png",
+    "order_id": order.id, //This is a sample Order ID. Pass the `id` obtained in the response of Step 1
+    "handler": function async (response){
+        verifyPayment(response, order, cartId)
+    },
+    "prefill": {
+        "name": "Gaurav Kumar",
+        "email": "gaurav.kumar@example.com",
+        "contact": "9000090000"
+    },
+    "notes": {
+        "address": "Razorpay Corporate Office"
+    },
+    "theme": {
+        "color": "#3399cc"
+    }
+  };
+  var rzp1 = new Razorpay(options);
+  rzp1.on('payment.failed', function (response){
+          // alert(response.error.code);
+          // alert(response.error.description);
+          // alert(response.error.source);
+          // alert(response.error.step);
+          // alert(response.error.reason);
+          // alert(response.error.metadata.order_id);
+          // alert(response.error.metadata.payment_id);
+  });
+  rzp1.open();
+}
+
+function verifyPayment(payment, order, cartId){
+  $.ajax({
+    url: '/verify-payment',
+    data: {payment, order , cartId},
+    method: 'post',
+    success:async function (response){
+      if(response.orderPlaced){
+        return location.href = `/order-placed/${response.orderId}`
+      }else{
+        console.log(response.err);
+        Swal.fire({
+          title: 'Payment Failed',
+          text: 'check your money is debited',
+          icon: 'warning'
+        })
+      }
+    },
+    error: function(err){
+      console.log(err);
+    }
+  })
+}
+
+  $('#reset-password-form').validate({
+    rules: {
+      number: {
+        number: true,
+        required: true,
+        minlength: 10,
+        maxlength: 10
+      }
+    },
+    messages: {
+      number: {
+        number: "Valid only digits",
+        required: 'Enter registered mobile number',
+        minlength: 'Enter a valid 10 digit mobile number',
+        maxlength: 'Enter a valid 10 digit mobile number'
+      }
+    },
+    errorPlacement: function (error, element) {
+      if (element.attr('name') === 'number') {
+        // Adjust the error message position for addressType and paymentMethod fields
+        error.appendTo(element.closest('.form-group'));
+      } else {
+        // Default error message placement for other fields
+        error.insertAfter(element);
+      }
+    },
+    submitHandler: (form) => {
+      var mobNum = $('#mobile').val()
+      $.ajax({
+        url: '/reset-password',
+        method: 'post',
+        data: {mobNum},
+        success: (res) => {
+          if(res){
+            $(form).find('button[type="submit"]').remove()
+            $('#mobile').prop('readonly', true)
+            $('#otp-field').removeClass('d-none').addClass('d-flex')
+          }else{
+            Swal.fire({
+              title: 'User Not Found',
+              text: 'Given mobile number is not registered',
+              icon: 'warning',
+              showCancelButton: true,
+              confirmButtonText: 'Register Now'
+            }).then(result => {
+              if(result.isConfirmed){
+                location.replace('/signup')
+              }
+            })
+          }
+        }
+      })
+    }
+  })
+
+
+  $('#otp-field').find('button').click(() => {
+    var otpRegx = /^\d{6}$/;
+    var otp = $('#confirm-otp').val();
+    var mobNum = $('#mobile').val();
+    var errorField = $('#otp-error');
+
+    if(otpRegx.test(otp)){
+      $(errorField).addClass('d-none');
+      $.ajax({
+        url: '/reset-password/verify',
+        method: 'post',
+        data: {otp, mobNum},
+        success: (res) => {
+          if(res){
+            $('#reset-password-form').remove()
+            $('#otp-field').removeClass('d-flex').addClass('d-none')
+            var newPassForm = newPasswordHTML(res._id)
+            $('#page-wrapper').after(newPassForm)
+          }else{
+            $(errorField).removeClass('d-none');
+          }
+        }
+      })
+
+    }else{
+      $(errorField).removeClass('d-none');
+    };
+  });
+
+  function newPasswordHTML(id){
+    var newhtml = `
+    <form action="/new-password" method="post" id="set-password">
+        <div class="form-group">
+          <label for="new-password">New Password</label>
+          <input type="password" class="form-control" name="newPassword" placeholder="Enter new password">
+          <input type="text" class="form-control" value="${id}" name="userId" hidden>
+        </div>
+        <div class="form-group">
+          <label for="confirm-password">Confirm Password</label>
+          <input type="password" class="form-control" name="confirmPassword" placeholder="Confirm new password">
+        </div>
+        <button type="submit" class="btn btn-primary">Submit</button>
+    </form>`
+    return newhtml
+  }
+
+  $(document).on("submit", "#set-password", function(e) {
+    e.preventDefault(); // Prevent the form from submitting normally
+    $.validator.addMethod("strongPassword",function(value, element) {
+        return this.optional(element) || /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]{6,16}$/.test(value);
+      },
+      "Password must contain uppercase, smallercase letters and digits and be 6 to 16 characters long"
+    );
+
+    // Perform form validation
+    $(this).validate({
+      rules: {
+        newPassword: {
+          required: true,
+          strongPassword: true 
+        },
+        confirmPassword: {
+          required: true,
+          equalTo: "[name='newPassword']",
+        },
+      },
+      messages: {
+        newPassword: {
+          required: "Please enter a new password"
+        },
+        confirmPassword: {
+          required: "Please confirm your new password",
+          equalTo: "Passwords do not match",
+        },
+      },
+      submitHandler: function(form) {
+        // Form submission logic here
+        form.submit(); // Submit the form
+      },
+    });
+
+    // Trigger validation
+    if ($(this).valid()) {
+      $(this).submit()
+    }
+  });
+
+</script>
+
+</body>
+
+</html>
